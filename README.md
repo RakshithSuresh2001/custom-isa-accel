@@ -12,28 +12,28 @@ The RTL was verified with directed simulation and taken through the full ASAP7 7
 ┌─────────────────────────────────────────────────────┐
 │                    cpu_top                          │
 │                                                     │
-│  ┌────────┐  ┌────────┐  ┌──────────────────────┐  │
-│  │ Fetch  │→ │ Decode │→ │       Execute        │  │
-│  └────────┘  └────────┘  │  (AXI-Lite Master)   │  │
+│  ┌────────┐  ┌────────┐  ┌──────────────────────┐   │
+│  │ Fetch  │→ │ Decode │→ │       Execute        │   │
+│  └────────┘  └────────┘  │  (AXI-Lite Master)   │   │
 │                           └──────────┬───────────┘  │
-│  ┌────────┐  ┌──────────┐           │              │
-│  │  BHT   │  │  Hazard  │←──────────┘              │
-│  └────────┘  └──────────┘  accel_stall             │
+│  ┌────────┐  ┌──────────┐           │               │
+│  │  BHT   │  │  Hazard  │←──────────┘               │
+│  └────────┘  └──────────┘  accel_stall              │
 └─────────────────────────────────────────────────────┘
                     │ AXI-Lite
 ┌───────────────────▼─────────────────────────────────┐
-│                 accel_wrapper                        │
+│                 accel_wrapper                       │
 │                                                     │
-│  ┌─────────────────────┐  ┌────────────────────┐   │
-│  │      accel_top      │  │     scratchpad     │   │
-│  │  (Control FSM)      │↔ │  A: 64×8b  (acts) │   │
-│  │                     │  │  B: 64×8b  (wgts) │   │
-│  │  ┌───────────────┐  │  │  C:  8×32b (res)  │   │
-│  │  │ systolic_array│  │  └────────────────────┘   │
-│  │  │   8×8 PEs     │  │                           │
-│  │  │ weight-stat.  │  │                           │
-│  │  └───────────────┘  │                           │
-│  └─────────────────────┘                           │
+│  ┌─────────────────────┐  ┌────────────────────┐    │
+│  │      accel_top      │  │     scratchpad     │    │
+│  │  (Control FSM)      │↔ │  A: 64×8b  (acts) │     │
+│  │                     │  │  B: 64×8b  (wgts) │     │
+│  │  ┌───────────────┐  │  │  C:  8×32b (res)  │     │
+│  │  │ systolic_array│  │  └────────────────────┘    │
+│  │  │   8×8 PEs     │  │                            │
+│  │  │ weight-stat.  │  │                            │
+│  │  └───────────────┘  │                            │
+│  └─────────────────────┘                            │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -116,6 +116,7 @@ Test 3: CPU pipeline — MLOAD/MMUL/MSTORE through 5-stage pipeline
   Expected: psum[c] = c+1, pipeline resumes correctly after MSTORE
   Result:   11/11 PASS
 ```
+<img width="949" height="1027" alt="Screenshot 2026-06-11 173309" src="https://github.com/user-attachments/assets/3ba82360-8fbf-433d-8af3-4ffc95d3e4c7" />
 
 ### Running the tests
 
@@ -154,7 +155,7 @@ WNS of -645ps on the first pass with default PDN settings. Achievable frequency 
 
 ### GDS Layout
 
-![GDS Layout](pd/results/gds_layout.png)
+<img width="1051" height="939" alt="Screenshot 2026-06-11 183453" src="https://github.com/user-attachments/assets/a6d3080f-3dbf-44ee-a214-bcffc80d2df9" />
 
 ### Flow
 
