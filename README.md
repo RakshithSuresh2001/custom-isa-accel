@@ -118,6 +118,18 @@ Test 3: CPU pipeline — MLOAD/MMUL/MSTORE through 5-stage pipeline
 ```
 <img width="949" height="1027" alt="Screenshot 2026-06-11 173309" src="https://github.com/user-attachments/assets/3ba82360-8fbf-433d-8af3-4ffc95d3e4c7" />
 
+## VCS Portability Findings
+
+Attempted to compile and run tb_cpu_accel.sv under Synopsys VCS X-2025.06. Two real LRM compliance issues surfaced that Verilator silently permits:
+
+### Finding 1: Timescale consistency (LRM 1364-2001)
+pe.sv and systolic_array.sv were missing `timescale directives while other files in the design had them. VCS enforces per-file timescale consistency; Verilator does not. Fixed by adding `timescale 1ns/1ps to both files.
+
+### Finding 2: Multi-driver conflict on always_ff variables (LRM IEEE 1800)
+The testbench uses backdoor hierarchical access to preload the scratchpad memory arrays (mem_a, mem_b) directly via u_accel.u_scratchpad.mem_a[i] in an initial block. VCS correctly rejects this because mem_a and mem_b are already driven by always_ff blocks inside scratchpad.sv, and LRM prohibits any other process (including initial blocks and force/release with non-constant indices) from driving the same variable. Verilator permits this pattern without error.
+
+The fix requires either driving the scratchpad through its actual write ports (sram_a_wen, sram_b_wen) from the testbench, or restructuring the memory arrays to use always instead of always_ff. Both involve non-trivial RTL and testbench changes. The functional verification (27/27 tests passing under Verilator with Spike ISS co-simulation) remains valid. This finding documents a real LRM gap exposed by cross-simulator testing, specifically that always_ff multi-driver restrictions are stricter in commercial simulators than in open-source tools.
+
 ### Running the tests
 
 ```bash
