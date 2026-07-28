@@ -177,6 +177,29 @@ make DESIGN_CONFIG=./designs/asap7/custom-isa-accel/config.mk
 ```
 
 ---
+## FPGA Bring-up (Arty A7-100T)
+
+Status: verified running on real hardware.
+
+The design synthesizes, implements, and generates a clean bitstream targeting the Arty A7-100T (xc7a100tcsg324-1). Programmed via JTAG through Vivado's Hardware Manager and confirmed running on the board, not just in simulation.
+
+### Reset polarity bug
+
+First bring-up attempt failed silently. Synthesis, implementation, and bitstream generation all completed without errors, but the board came up with its status LEDs frozen in a pattern that only matched one state: permanent reset. Pressing the reset button did nothing.
+
+The bug wasn't in the RTL. I had inverted the reset signal polarity, assuming the board's reset button was active-high, which is standard for most Xilinx dev board GPIO buttons. The Arty A7's ck_rst signal is wired differently: it's already active-low at the hardware level. My inversion held the design in permanent reset, and there was no way to catch this in simulation since it depends entirely on how the physical board is wired, not on the RTL logic itself.
+
+Traced it by reading LED states against Digilent's reference documentation rather than guessing at the fix. Removed the inversion, reran the implementation flow, and the board came up clean: correct reset behavior, heartbeat LED blinking, full design running.
+
+### Known limitations
+The MicroBlaze AXI-Lite scratchpad preload interface is currently stubbed (tied to zero). The accelerator core is verified running on hardware, but the weight and activation loading path via MicroBlaze is not yet wired up.
+Next steps
+Instantiate a MicroBlaze soft core via Vivado's IP Integrator / Block Design
+Package accel_wrapper as a proper AXI-Lite slave IP
+Write a C driver (via Vitis) to load weights and activations and trigger the accelerator
+Validate end-to-end: real data flowing through the systolic array on physical hardware
+
+---
 
 ## Key Design Decisions
 
