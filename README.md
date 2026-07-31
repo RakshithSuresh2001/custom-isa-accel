@@ -200,7 +200,61 @@ Write a C driver (via Vitis) to load weights and activations and trigger the acc
 Validate end-to-end: real data flowing through the systolic array on physical hardware
 
 ---
+## FPGA Bring-Up via openXC7 (Vivado-Free)
 
+The CPU + accelerator design (arty_top.sv) has been verified running on real Arty A7-100T hardware through a fully open-source FPGA toolchain, with zero Vivado involvement.
+
+### Toolchain: openXC7 (Yosys + nextpnr-xilinx + prjxray)
+
+### Flow:
+
+Yosys synthesis (synth_xilinx, arch xc7)
+        │
+        ▼
+nextpnr-xilinx (place and route)
+        │
+        ▼
+fasm2frames (bitstream frame generation)
+        │
+        ▼
+xc7frames2bit (final .bit assembly)
+        │
+        ▼
+OpenOCD + JTAG (board programming)
+
+### Commands:
+
+bash
+yosys -p "synth_xilinx -flatten -abc9 -arch xc7 -top arty_top; write_json arty_top.json" \
+  rtl/top/arty_top.sv rtl/top/cpu_top.sv \
+  rtl/cpu/decode.sv rtl/cpu/memory_stage.sv rtl/cpu/execute.sv rtl/cpu/writeback.sv \
+  rtl/cpu/bht.sv rtl/cpu/hazard.sv rtl/cpu/fetch.sv rtl/cpu/regfile.sv \
+  rtl/accel/accel_wrapper.sv rtl/accel/systolic_array_wrap.sv rtl/accel/systolic_array.sv \
+  rtl/accel/accel_top.sv rtl/accel/scratchpad.sv rtl/accel/pe.sv
+
+nextpnr-xilinx --chipdb xc7a100t.bin --xdc fpga/openxc7/arty_top.xdc \
+  --json arty_top.json --fasm arty_top.fasm
+
+fasm2frames --part xc7a100tcsg324-1 --db-root <prjxray-db>/artix7 \
+  arty_top.fasm arty_top.frames
+
+xc7frames2bit --part_file <prjxray-db>/artix7/xc7a100tcsg324-1/part.yaml \
+  --part_name xc7a100tcsg324-1 --frm_file arty_top.frames --output_file arty_top.bit
+
+openocd -f interface/ftdi/digilent_jtag_smt2.cfg -c "ftdi vid_pid 0x0403 0x6010" \
+  -c "ftdi channel 0" -c "adapter speed 6000" -f cpld/xilinx-xc7.cfg \
+  -c "init; xc7_program xc7.tap; pld load 0 arty_top.bit; exit"
+
+### Notes:
+
+This top-level variant omits the MicroBlaze soft core (proprietary Xilinx IP, not portable through openXC7). Scratchpad preload ports are tied off; a separate Vivado/MicroBlaze branch handles weight/activation loading.
+
+decode.sv uses a synchronous reset (always_ff @(posedge clk) with if (!rst_n) inside) rather than an async reset in the sensitivity list. This was required for Yosys's proc_dff pass to synthesize correctly under synth_xilinx -abc9; async reset works fine under Vivado but triggers a "multiple edge sensitive events" error in this flow.
+
+fpga/openxc7/imem.hex is a fixed bring-up test program (NOP padding + MLOAD/MMUL/MSTORE sequence + an ALU sanity check), not general-purpose firmware.
+Verified result: heartbeat LED confirmed blinking on real Arty A7-100T hardware, place-and-route timing closure passing at up to 247 MHz (well above the 100 MHz system clock requirement).
+
+---
 ## Key Design Decisions
 
 **Why a custom ISA extension instead of MMIO?**
