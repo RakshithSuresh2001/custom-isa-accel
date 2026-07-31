@@ -1,0 +1,7 @@
+# openXC7 build artifacts (regenerated via `make` in openXC7/)
+openXC7/xc7a100t.bin
+openXC7/xc7a100t.bba
+openXC7/*.json
+openXC7/*.fasm
+openXC7/*.frames
+openXC7/*.bit
