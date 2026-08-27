@@ -89,12 +89,20 @@ custom-isa-accel/
 │   └── top/
 │       └── cpu_top.sv         # full system integration
 ├── tb/
-│   ├── accel_wrapper_tb.sv    # unit tests (2 test cases)
-│   └── tb_cpu_accel.sv        # CPU-level pipeline test
-└── sim/
-    ├── run_accel_tb.sh
-    ├── run_cpu_tb.sh
-    └── run_all_tb.sh
+│   ├── accel_wrapper_tb.sv       # original combined testbench (kept for reference)
+│   ├── accel_wrapper_tb1.sv      # Test 1: identity weights (standalone)
+│   ├── accel_wrapper_tb2.sv      # Test 2: all-ones weights (standalone)
+│   ├── accel_wrapper_tb3_only.sv # Test 3: PyTorch reference validation (standalone)
+│   └── tb_cpu_accel.sv           # CPU-level pipeline test
+├── sim/
+│   ├── run_accel_tb.sh
+│   ├── run_cpu_tb.sh
+│   └── run_all_tb.sh
+└── validation/
+    ├── gen_vectors.py         # PyTorch reference vector generator
+    ├── weights.hex            # 8x8 random weight matrix (uint8)
+    ├── activations.hex        # 8-element random activation vector (uint8)
+    └── expected.hex           # PyTorch matmul reference output (int32)
 ```
 
 ---
@@ -115,8 +123,32 @@ Test 2: All-ones weight matrix, activations 1..8
 Test 3: CPU pipeline — MLOAD/MMUL/MSTORE through 5-stage pipeline
   Expected: psum[c] = c+1, pipeline resumes correctly after MSTORE
   Result:   11/11 PASS
+
+Test 4: PyTorch reference validation — random 8x8 weights, random activations
+  Reference: torch.matmul on uint8 inputs, int32 accumulation
+  Result:    8/8 PASS (bit-exact match against PyTorch output)
 ```
 <img width="949" height="1027" alt="Screenshot 2026-06-11 173309" src="https://github.com/user-attachments/assets/3ba82360-8fbf-433d-8af3-4ffc95d3e4c7" />
+
+## PyTorch Reference Validation
+
+To validate the accelerator's integer datapath against an independent ground truth (not just hand-derived expected values), `validation/gen_vectors.py` generates a random 8x8 weight matrix and 8-element activation vector, computes the reference result with PyTorch's integer matmul, and writes all three as `.hex` files consumed by the testbench via `$readmemh`.
+
+The PE datapath is pure integer (`psum_out <= psum_in + (weight_reg * act_in)`, `DATA_W=8`, `ACC_W=32`), so no fixed-point quantization is needed — weights and activations are generated directly in the uint8 range and compared bit-exact against PyTorch's int32 output.
+
+```bash
+cd validation && python3 gen_vectors.py
+```
+
+This regenerates `weights.hex`, `activations.hex`, and `expected.hex`. Copy them into `sim/` before running `run_accel_tb.sh`, since `$readmemh` resolves paths relative to the simulation's working directory.
+
+### Bug found during validation
+
+Comparing against an independent reference exposed a latent bug that directed testing had missed: `accel_wrapper.sv`'s scratchpad address mux (`sram_a_wen_ext ? sram_a_addr_ext : sram_a_addr`) depends on external MicroBlaze-preload ports that the standalone testbench never connects. In Icarus Verilog, the unconnected `sram_a_wen_ext`/`sram_b_wen_ext` inputs resolve to `x`, which poisons the mux output and, once multiplied through the systolic array's MAC chain, produces `x` on every `mem_c` output permanently. This was silently present in Test 1 and Test 2 as well; the checker code compared `x` against expected values as data, so it never surfaced as a failure until the PyTorch cross-check flagged the mismatch. Fixed by tying off the unused external ports (`6'b0`/`1'b0`/`8'b0`) in each testbench's DUT instantiation.
+
+### Testbench structure
+
+The original `accel_wrapper_tb.sv` declared three testbench modules (`accel_wrapper_tb`, `accel_wrapper_tb2`, `accel_wrapper_tb3`) in one file, compiled with `-s <module>` to select which one `vvp` should run. Icarus Verilog elaborates every top-level module in the compiled source regardless of `-s`, so all three testbenches' `initial` blocks ran concurrently in the same simulation — the actual cause of the `x` propagation described above, independent of the port bug. Splitting each test into its own file (`accel_wrapper_tb1.sv`, `accel_wrapper_tb2.sv`, `accel_wrapper_tb3_only.sv`) guarantees only one top-level testbench is ever in scope per `iverilog` invocation.
 
 ## VCS Portability Findings
 
@@ -143,7 +175,7 @@ cd sim && ./run_cpu_tb.sh
 cd sim && ./run_all_tb.sh
 ```
 
-Simulation uses Icarus Verilog (`iverilog -g2012`). No additional dependencies.
+Simulation uses Icarus Verilog (`iverilog -g2012`). No additional dependencies for Tests 1-3. Test 4 (PyTorch validation) requires `pip install torch` only to regenerate vectors — the checked-in `.hex` files run without it.
 
 ---
 
