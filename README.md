@@ -187,15 +187,15 @@ Full RTL-to-GDS flow using OpenROAD. The systolic array scratchpad uses register
 
 | Metric | Value |
 |---|---|
-| Standard cells | 11,562 |
-| Design area | 1,515 µm² |
+| Standard cells | 10,930 |
+| Design area | 1,431 µm² |
 | Core utilization | 34% |
-| Clock target | 500MHz (2.0ns period) |
+| Clock target | 757 MHz (1320 ps period) |
 | WNS | -645ps |
-| Achievable frequency | ~756MHz |
+| Timing | Setup +215 ps, hold +37 ps, 0 DRC |
 | DRC violations | 0 (OpenROAD DRC clean) |
 
-WNS of -645ps on the first pass with default PDN settings. Achievable frequency is ~756MHz with timing-driven placement and PDN tuning. The IR drop report reflects an undersized PDN for this design size, which is the primary optimization target for the next iteration.
+Timing closes at 757 MHz at the ASAP7 FF corner with +215 ps setup slack, +37 ps hold slack and 0 route DRC. The critical path (1,177 ps) implies an Fmax of about 905 MHz. The IR drop report reflects an undersized PDN, which is the main target for the next iteration.
 
 ### GDS Layout
 
